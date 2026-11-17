@@ -40,6 +40,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_organizer = models.BooleanField(default=False)
+    is_participant = models.BooleanField(default=True)
     objects = CustomUserManager()
 
     USERNAME_FIELD = "phone"
