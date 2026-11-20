@@ -31,6 +31,7 @@ class Eventserializer(serializers.ModelSerializer):
     def create(self, validated_data):
 
         attributes_data = validated_data.pop('attributes_data', [])
+        validated_data['status'] = Event.Status.DRAFT
         event = Event.objects.create(**validated_data)
 
         for attr_data in attributes_data:
