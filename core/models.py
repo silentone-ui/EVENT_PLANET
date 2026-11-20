@@ -31,6 +31,9 @@ class CustomUserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+    class RoleChoices(models.TextChoices):
+        PARTICIPANT = 'participant','Participant'
+        ORGANIZER = 'organizer','Organizer'
     phone = models.CharField(max_length=11, unique=True)
     first_name = models.CharField(
         max_length=30,
@@ -40,8 +43,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-    is_organizer = models.BooleanField(default=False)
-    is_participant = models.BooleanField(default=True)
+    role = models.CharField(max_length=20,choices=RoleChoices,default=RoleChoices.PARTICIPANT)
     objects = CustomUserManager()
 
     USERNAME_FIELD = "phone"
