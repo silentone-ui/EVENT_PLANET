@@ -3,7 +3,7 @@ from decouple import config,Csv
 from .base import *
 
 DEBUG = config('DEBUG',cast=bool,default=True)
-ALLOWED_HOSTS += ['127.0.01','localhost']
+ALLOWED_HOSTS += ['127.0.0.1','localhost']
 
 DATABASES = {
     'default': {
