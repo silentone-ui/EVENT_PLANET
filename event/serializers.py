@@ -1,35 +1,35 @@
 from rest_framework import serializers
-from .models import *
+from .models import Event, EventAttribute, EventAttributeValue
 
 
 class EventAttributeValueSerializer(serializers.ModelSerializer):
     attribute_name = serializers.ReadOnlyField(source='attribute.name')
 
-
     class Meta:
         model = EventAttributeValue
-        fields=['id','attribute_name','value']
+        fields = ['id', 'attribute_name', 'value']
 
 
-class Eventserializer(serializers.ModelSerializer):
-    attributes = EventAttributeValueSerializer(source='attribute_values',many=True,read_only=True)
-    organizer_name = serializers.ReadOnlyField(source='organizer.username')
+class EventSerializer(serializers.ModelSerializer):
+    attributes = EventAttributeValueSerializer(source='attribute_values', many=True, read_only=True)
+    organizer_firstname = serializers.ReadOnlyField(source='organizer.first_name')
 
     attributes_data = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,
         required=False,
     )
+
     class Meta:
         model = Event
         fields = [
-            'id', 'title', 'description', 'location', 'start_time', 
-            'end_time', 'image', 'status', 'organizer_name', 'attributes','attributes_data'
+            'id', 'title', 'description', 'location', 'start_time',
+            'end_time', 'image', 'capacity', 'status',
+            'organizer_firstname', 'attributes', 'attributes_data'
         ]
-        read_only_fields = ['organizer','created_at']
+        read_only_fields = ['status', 'organizer_phone']
 
     def create(self, validated_data):
-
         attributes_data = validated_data.pop('attributes_data', [])
         validated_data['status'] = Event.Status.DRAFT
         event = Event.objects.create(**validated_data)
@@ -37,16 +37,19 @@ class Eventserializer(serializers.ModelSerializer):
         for attr_data in attributes_data:
             attribute_id = attr_data.get('attribute')
             value = attr_data.get('value')
-                
+
+            if not attribute_id or value is None:
+                raise serializers.ValidationError('هر ویژگی باید attribute و value داشته باشد.')
+
             try:
                 attribute = EventAttribute.objects.get(id=attribute_id)
-                EventAttributeValue.objects.create(
-                    event=event,
-                    attribute=attribute,
-                    value=value
-                )
             except EventAttribute.DoesNotExist:
-                pass 
+                raise serializers.ValidationError(f'ویژگی با id={attribute_id} وجود ندارد.')
+
+            EventAttributeValue.objects.create(
+                event=event,
+                attribute=attribute,
+                value=value
+            )
 
         return event
-
