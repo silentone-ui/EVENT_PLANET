@@ -93,3 +93,42 @@ class EventAttributeValue(models.Model):
 
     def __str__(self):
         return f"{self.event.title} - {self.attribute.name} : {self.value}"
+
+
+
+class Registration(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='registrations'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='registrations'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('event', 'user')
+
+    def __str__(self):
+        return f"{self.user} -> {self.event.title}"
+
+    def clean(self):
+        super().clean()
+        if not self.event_id or not self.user_id:
+            return
+        if self.event.status != Event.Status.PUBLISHED:
+            raise ValidationError('ثبت‌نام فقط برای رویداد منتشرشده مجاز است.')
+        if self.event.organizer_id == self.user_id:
+            raise ValidationError('برگزارکننده نمی‌تواند در رویداد خودش ثبت‌نام کند.')
+        qs = Registration.objects.filter(event=self.event)
+        if self.pk:
+            qs = qs.exclude(pk=self.pk)
+        if qs.count() >= self.event.capacity:
+            raise ValidationError('ظرفیت رویداد تکمیل شده است.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
