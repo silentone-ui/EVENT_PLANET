@@ -37,12 +37,6 @@ class Event(models.Model):
         related_name='organized_events'
     )
 
-    participants = models.ManyToManyField(
-        settings.AUTH_USER_MODEL,
-        related_name='attended_events',
-        blank=True
-    )
-
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -70,29 +64,77 @@ class Event(models.Model):
 
 
 class EventAttribute(models.Model):
-    name = models.CharField(max_length=100)
+    class DataType(models.TextChoices):
+        TEXT = 'text', 'Text'
+        INT = 'int', 'Integer'
+        BOOL = 'bool', 'Boolean'
+        DATE = 'date', 'Date'
+
+    name = models.CharField(max_length=100, unique=True)
+    data_type = models.CharField(max_length=10, choices=DataType.choices, default=DataType.TEXT)
 
     def __str__(self):
-        return self.name
+        return f"{self.name} ({self.data_type})"
 
 
 class EventAttributeValue(models.Model):
-    event = models.ForeignKey(
-        Event,
-        on_delete=models.CASCADE,
-        related_name='attribute_values',
-    )
-    attribute = models.ForeignKey(
-        EventAttribute,
-        on_delete=models.CASCADE,
-    )
-    value = models.CharField(max_length=255)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='attribute_values')
+    attribute = models.ForeignKey(EventAttribute, on_delete=models.CASCADE, related_name='event_values')
+    value_text = models.CharField(max_length=255, null=True, blank=True)
+    value_int = models.IntegerField(null=True, blank=True)
+    value_bool = models.BooleanField(null=True, blank=True)
+    value_date = models.DateField(null=True, blank=True)
 
     class Meta:
         unique_together = ('event', 'attribute')
 
     def __str__(self):
-        return f"{self.event.title} - {self.attribute.name} : {self.value}"
+        return f"{self.attribute.name} -> {self.value}"
+
+    @property
+    def value(self):
+        if not self.attribute_id:
+            return None
+        dt = self.attribute.data_type
+        if dt == EventAttribute.DataType.TEXT:
+            return self.value_text
+        if dt == EventAttribute.DataType.INT:
+            return self.value_int
+        if dt == EventAttribute.DataType.BOOL:
+            return self.value_bool
+        if dt == EventAttribute.DataType.DATE:
+            return self.value_date
+        return None
+
+    def clean(self):
+        super().clean()
+        if not self.attribute_id or not self.event_id:
+            return
+        dt = self.attribute.data_type
+        if dt == EventAttribute.DataType.TEXT:
+            if not self.value_text:
+                raise ValidationError('برای ویژگی متنی باید value_text پر شود.')
+            if self.value_int is not None or self.value_bool is not None or self.value_date is not None:
+                raise ValidationError('فقط value_text باید پر باشد، بقیه باید خالی باشند.')
+        elif dt == EventAttribute.DataType.INT:
+            if self.value_int is None:
+                raise ValidationError('برای ویژگی عددی باید value_int پر شود.')
+            if self.value_text or self.value_bool is not None or self.value_date is not None:
+                raise ValidationError('فقط value_int باید پر باشد، بقیه باید خالی باشند.')
+        elif dt == EventAttribute.DataType.BOOL:
+            if self.value_bool is None:
+                raise ValidationError('برای ویژگی بولین باید value_bool پر شود.')
+            if self.value_text or self.value_int is not None or self.value_date is not None:
+                raise ValidationError('فقط value_bool باید پر باشد، بقیه باید خالی باشند.')
+        elif dt == EventAttribute.DataType.DATE:
+            if self.value_date is None:
+                raise ValidationError('برای ویژگی تاریخی باید value_date پر شود.')
+            if self.value_text or self.value_int is not None or self.value_bool is not None:
+                raise ValidationError('فقط value_date باید پر باشد، بقیه باید خالی باشند.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 
