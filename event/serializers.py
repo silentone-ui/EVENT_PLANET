@@ -82,3 +82,22 @@ class StageAssignmentSerializer(serializers.ModelSerializer):
         model = StageAssignment
         fields = ['id', 'stage', 'stage_title', 'user', 'user_phone', 'role']
         read_only_fields = ['stage_title', 'user_phone']
+
+
+class FeedbackSerializer(serializers.ModelSerializer):
+    user_phone = serializers.ReadOnlyField(source='user.phone')
+    event_title = serializers.ReadOnlyField(source='event.title')
+
+    class Meta:
+        model = Feedback
+        fields = ['id', 'event', 'event_title', 'user_phone', 'rating', 'comment', 'created_at']
+        read_only_fields = ['event_title', 'user_phone', 'created_at']
+
+
+class ResultSerializer(serializers.ModelSerializer):
+    event_title = serializers.ReadOnlyField(source='event.title')
+
+    class Meta:
+        model = Result
+        fields = ['id', 'event', 'event_title', 'title', 'description', 'created_at', 'updated_at']
+        read_only_fields = ['event_title', 'created_at', 'updated_at']

@@ -196,3 +196,68 @@ class StageAssignment(models.Model):
 
     def __str__(self):
         return f"{self.user} as {self.role} in {self.stage.title}"
+
+
+class Feedback(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='feedbacks'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='feedbacks'
+    )
+    rating = models.PositiveSmallIntegerField()
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('event', 'user')
+
+    def __str__(self):
+        return f"{self.user} -> {self.event.title} ({self.rating})"
+
+    def clean(self):
+        super().clean()
+        if not self.event_id or not self.user_id:
+            return
+        if self.event.status != Event.Status.FINISHED:
+            raise ValidationError('بازخورد فقط وقتی مجاز است که رویداد finished شده باشد.')
+        if self.event.organizer_id == self.user_id:
+            raise ValidationError('برگزارکننده نمی‌تواند بازخورد ثبت کند.')
+        if not Registration.objects.filter(event=self.event, user_id=self.user_id).exists():
+            raise ValidationError('فقط شرکت‌کننده‌ای که ثبت‌نام کرده می‌تواند بازخورد بدهد.')
+        if not 1 <= self.rating <= 5:
+            raise ValidationError('امتیاز باید بین ۱ تا ۵ باشد.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class Result(models.Model):
+    event = models.OneToOneField(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='result'
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"نتیجه {self.event.title}"
+
+    def clean(self):
+        super().clean()
+        if not self.event_id:
+            return
+        if self.event.status != Event.Status.FINISHED:
+            raise ValidationError('انتشار نتیجه فقط وقتی مجاز است که رویداد finished شده باشد.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)

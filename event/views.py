@@ -110,3 +110,43 @@ class StageAssignmentViewSet(viewsets.ModelViewSet):
             serializer.save()
         except DjangoValidationError as e:
             raise DRFValidationError(e.messages)
+
+
+
+
+class FeedbackViewSet(viewsets.ModelViewSet):
+    serializer_class = FeedbackSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return Feedback.objects.filter(
+            Q(user=user) | Q(event__organizer=user)
+        ).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        try:
+            serializer.save(user=self.request.user)
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.messages)
+
+
+class ResultViewSet(viewsets.ModelViewSet):
+    serializer_class = ResultSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsEventOwnerOrReadOnly]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Result.objects.select_related('event').order_by('-created_at')
+        if getattr(user, 'role', None) == 'organizer' and user.is_authenticated:
+            return qs.filter(Q(event__organizer=user) | Q(event__status=Event.Status.FINISHED))
+        return qs.filter(event__status=Event.Status.FINISHED)
+
+    def perform_create(self, serializer):
+        event = serializer.validated_data.get('event')
+        if event.organizer != self.request.user:
+            raise DRFValidationError('فقط برگزارکننده همان ایونت می‌تواند نتیجه منتشر کند.')
+        try:
+            serializer.save()
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.messages)

@@ -22,6 +22,13 @@ class StageAssignmentInline(admin.TabularInline):
     autocomplete_fields = ('user',)
 
 
+class FeedbackInline(admin.TabularInline):
+    model = Feedback
+    extra = 0
+    fields = ('user', 'rating', 'comment')
+    readonly_fields = ('created_at',)
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = ('title', 'status', 'organizer', 'capacity')
@@ -49,6 +56,19 @@ class RegistrationAdmin(admin.ModelAdmin):
 class StageAssignmentAdmin(admin.ModelAdmin):
     list_display = ('stage', 'user', 'role')
     list_filter = ('role',)
+
+
+@admin.register(Feedback)
+class FeedbackAdmin(admin.ModelAdmin):
+    list_display = ('event', 'user', 'rating', 'created_at')
+    list_filter = ('event', 'rating')
+
+
+@admin.register(Result)
+class ResultAdmin(admin.ModelAdmin):
+    list_display = ('event', 'title', 'created_at')
+    search_fields = ('title', 'event__title')
+
 
 
 @admin.register(EventAttribute)
