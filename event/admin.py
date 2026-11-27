@@ -10,20 +10,45 @@ class RegistrationInline(admin.TabularInline):
     autocomplete_fields = ('user',)
 
 
+class StageInline(admin.TabularInline):
+    model = Stage
+    extra = 0
+    fields = ('title', 'start_time', 'end_time')
+
+
+class StageAssignmentInline(admin.TabularInline):
+    model = StageAssignment
+    extra = 0
+    autocomplete_fields = ('user',)
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = ('title', 'status', 'organizer', 'capacity')
-    readonly_fields = ('id',)
     list_filter = ('status',)
     search_fields = ('title',)
     exclude = ('participants',)
-    inlines = [RegistrationInline]
+    inlines = [StageInline, RegistrationInline]
+
+
+@admin.register(Stage)
+class StageAdmin(admin.ModelAdmin):
+    list_display = ('title', 'event', 'start_time', 'end_time')
+    list_filter = ('event',)
+    search_fields = ('title',)
+    inlines = [StageAssignmentInline]
 
 
 @admin.register(Registration)
 class RegistrationAdmin(admin.ModelAdmin):
     list_display = ('event', 'user', 'created_at')
     list_filter = ('event',)
+
+
+@admin.register(StageAssignment)
+class StageAssignmentAdmin(admin.ModelAdmin):
+    list_display = ('stage', 'user', 'role')
+    list_filter = ('role',)
 
 
 @admin.register(EventAttribute)

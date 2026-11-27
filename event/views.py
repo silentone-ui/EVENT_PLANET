@@ -4,9 +4,9 @@ from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
-from .models import Event, Registration
-from .serializers import EventSerializer, RegistrationSerializer
-from core.permissions import IsOrganizerOrReadOnly
+from .models import *
+from .serializers import *
+from core.permissions import *
 
 
 class EventViewSet(viewsets.ModelViewSet):
@@ -63,5 +63,50 @@ class RegistrationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         try:
             serializer.save(user=self.request.user)
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.messages)
+
+
+class StageViewSet(viewsets.ModelViewSet):
+    serializer_class = StageSerializer
+    permission_classes = [permissions.IsAuthenticated, IsEventOwnerOrReadOnly]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Stage.objects.select_related('event').order_by('start_time')
+        event_id = self.request.query_params.get('event')
+        if event_id:
+            qs = qs.filter(event_id=event_id)
+        if getattr(user, 'role', None) == 'organizer':
+            return qs.filter(Q(event__status=Event.Status.PUBLISHED) | Q(event__organizer=user))
+        return qs.filter(event__status=Event.Status.PUBLISHED)
+
+    def perform_create(self, serializer):
+        event = serializer.validated_data.get('event')
+        if event.organizer != self.request.user:
+            raise DRFValidationError('فقط برگزارکننده همان ایونت می‌تواند مرحله بسازد.')
+        try:
+            serializer.save()
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.messages)
+
+
+class StageAssignmentViewSet(viewsets.ModelViewSet):
+    serializer_class = StageAssignmentSerializer
+    permission_classes = [permissions.IsAuthenticated, IsEventOwnerOrReadOnly]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = StageAssignment.objects.select_related('stage', 'user', 'stage__event')
+        if getattr(user, 'role', None) == 'organizer':
+            return qs.filter(Q(stage__event__organizer=user) | Q(stage__event__status=Event.Status.PUBLISHED))
+        return qs.filter(stage__event__status=Event.Status.PUBLISHED)
+
+    def perform_create(self, serializer):
+        stage = serializer.validated_data.get('stage')
+        if stage.event.organizer != self.request.user:
+            raise DRFValidationError('فقط برگزارکننده همان ایونت می‌تواند نقش بدهد.')
+        try:
+            serializer.save()
         except DjangoValidationError as e:
             raise DRFValidationError(e.messages)

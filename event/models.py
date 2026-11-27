@@ -132,3 +132,67 @@ class Registration(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+
+class Stage(models.Model):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='stages'
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['start_time']
+
+    def __str__(self):
+        return f"{self.title} ({self.event.title})"
+
+    def clean(self):
+        super().clean()
+        if not self.start_time or not self.end_time:
+            return
+        if self.start_time >= self.end_time:
+            raise ValidationError('زمان شروع بخش باید قبل از زمان پایان باشد.')
+        if self.event_id:
+            if self.start_time < self.event.start_time or self.end_time > self.event.end_time:
+                raise ValidationError('ساعت بخش باید داخل بازه زمانی ایونت باشد.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
+class StageAssignment(models.Model):
+    class RoleChoices(models.TextChoices):
+        SPEAKER = 'speaker', 'Speaker'
+        JUDGE = 'judge', 'Judge'
+        COACH = 'coach', 'Coach'
+
+    stage = models.ForeignKey(
+        Stage,
+        on_delete=models.CASCADE,
+        related_name='assignments'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='stage_assignments'
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=RoleChoices.choices,
+        default=RoleChoices.SPEAKER
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('stage', 'user', 'role')
+
+    def __str__(self):
+        return f"{self.user} as {self.role} in {self.stage.title}"

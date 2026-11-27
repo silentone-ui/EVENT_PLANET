@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Event, EventAttribute, EventAttributeValue, Registration
+from .models import *
 
 
 class EventAttributeValueSerializer(serializers.ModelSerializer):
@@ -63,3 +63,22 @@ class RegistrationSerializer(serializers.ModelSerializer):
         model = Registration
         fields = ['id', 'event', 'event_title', 'user_phone', 'created_at']
         read_only_fields = ['event_title', 'user_phone', 'created_at']
+
+
+class StageSerializer(serializers.ModelSerializer):
+    event_title = serializers.ReadOnlyField(source='event.title')
+
+    class Meta:
+        model = Stage
+        fields = ['id', 'event', 'event_title', 'title', 'description', 'start_time', 'end_time', 'created_at']
+        read_only_fields = ['event_title', 'created_at']
+
+
+class StageAssignmentSerializer(serializers.ModelSerializer):
+    user_phone = serializers.ReadOnlyField(source='user.phone')
+    stage_title = serializers.ReadOnlyField(source='stage.title')
+
+    class Meta:
+        model = StageAssignment
+        fields = ['id', 'stage', 'stage_title', 'user', 'user_phone', 'role']
+        read_only_fields = ['stage_title', 'user_phone']
