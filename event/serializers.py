@@ -1,14 +1,69 @@
 from rest_framework import serializers
 from .models import *
+import datetime
 
+class AnyValueField(serializers.Field):
+    def to_representation(self, value):
+        return value
+    def to_internal_value(self, data):
+        return data
+
+
+class EventAttributeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventAttribute
+        fields = ['id', 'name', 'data_type']
 
 class EventAttributeValueSerializer(serializers.ModelSerializer):
     attribute_name = serializers.ReadOnlyField(source='attribute.name')
+    data_type = serializers.ReadOnlyField(source='attribute.data_type')
+    display_value = serializers.ReadOnlyField(source='value')
+    value = AnyValueField(write_only=True)
 
     class Meta:
         model = EventAttributeValue
-        fields = ['id', 'attribute_name', 'value']
+        fields = ['id', 'event', 'attribute', 'attribute_name', 'data_type', 'display_value', 'value']
 
+    def validate(self, attrs):
+        attr = attrs.get('attribute')
+        if attr is None and self.instance is not None:
+            attr = self.instance.attribute
+        if attr is None:
+            raise serializers.ValidationError('ویژگی مشخص نیست.')
+        if 'value' not in attrs:
+            raise serializers.ValidationError('فیلد value الزامی است.')
+
+        val = attrs.pop('value')
+        dt = attr.data_type
+
+        attrs['value_text'] = None
+        attrs['value_int'] = None
+        attrs['value_bool'] = None
+        attrs['value_date'] = None
+
+        if dt == EventAttribute.DataType.TEXT:
+            if not isinstance(val, str):
+                raise serializers.ValidationError('برای این ویژگی باید رشته بفرستی.')
+            attrs['value_text'] = val
+        elif dt == EventAttribute.DataType.INT:
+            if not isinstance(val, int) or isinstance(val, bool):
+                raise serializers.ValidationError('برای این ویژگی باید عدد صحیح بفرستی.')
+            attrs['value_int'] = val
+        elif dt == EventAttribute.DataType.BOOL:
+            if not isinstance(val, bool):
+                raise serializers.ValidationError('برای این ویژگی باید true یا false بفرستی.')
+            attrs['value_bool'] = val
+        elif dt == EventAttribute.DataType.DATE:
+            if isinstance(val, str):
+                try:
+                    val = datetime.date.fromisoformat(val)
+                except ValueError:
+                    raise serializers.ValidationError('تاریخ باید مثل 2026-12-10 باشد.')
+            if not isinstance(val, datetime.date):
+                raise serializers.ValidationError('برای این ویژگی باید تاریخ بفرستی.')
+            attrs['value_date'] = val
+
+        return attrs
 
 class EventSerializer(serializers.ModelSerializer):
     attributes = EventAttributeValueSerializer(source='attribute_values', many=True, read_only=True)

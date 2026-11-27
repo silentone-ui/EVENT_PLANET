@@ -150,3 +150,25 @@ class ResultViewSet(viewsets.ModelViewSet):
             serializer.save()
         except DjangoValidationError as e:
             raise DRFValidationError(e.messages)
+
+class EventAttributeViewSet(viewsets.ModelViewSet):
+    queryset = EventAttribute.objects.all().order_by('name')
+    serializer_class =   EventAttributeSerializer
+    permission_classes = [permissions.IsAuthenticated, IsOrganizerOrReadOnly]
+
+class EventAttributeValueViewSet(viewsets.ModelViewSet):
+    serializer_class = EventAttributeValueSerializer
+    permission_classes = [permissions.IsAuthenticated, IsEventOwnerOrReadOnly]
+    def get_queryset(self):
+        qs = EventAttributeValue.objects.select_related('event', 'attribute')
+        if getattr(self.request.user, 'role', None) == 'organizer':
+            return qs.filter(Q(event__organizer=self.request.user) | Q(event__status=Event.Status.PUBLISHED))
+        return qs.filter(event__status=Event.Status.PUBLISHED)
+    def perform_create(self, serializer):
+        event = serializer.validated_data.get('event')
+        if event.organizer != self.request.user:
+            raise DRFValidationError('فقط برگزارکننده همان ایونت می‌تواند مقدار بدهد.')
+        try:
+            serializer.save()
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.messages)

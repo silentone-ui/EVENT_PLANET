@@ -9,6 +9,9 @@ router.register(r'stages', StageViewSet, basename='stage')
 router.register(r'stage-assignments', StageAssignmentViewSet, basename='stage-assignment')
 router.register(r'feedbacks', FeedbackViewSet, basename='feedback')
 router.register(r'results', ResultViewSet, basename='result')
+router.register(r'attributes', EventAttributeViewSet, basename='attribute')
+router.register(r'attribute-values', EventAttributeValueViewSet, basename='attribute-value')
+
 
 urlpatterns = [
     path('', include(router.urls)),
