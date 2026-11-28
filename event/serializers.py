@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import *
 import datetime
+from django.db import transaction
 
 class AnyValueField(serializers.Field):
     def to_representation(self, value):
@@ -88,28 +89,30 @@ class EventSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         attributes_data = validated_data.pop('attributes_data', [])
         validated_data['status'] = Event.Status.DRAFT
-        event = Event.objects.create(**validated_data)
+        with transaction.atomic():
+            event = Event.objects.create(**validated_data)
 
-        for attr_data in attributes_data:
-            attribute_id = attr_data.get('attribute')
-            value = attr_data.get('value')
-            if not attribute_id or value is None:
-                raise serializers.ValidationError('هر ویژگی باید attribute و value داشته باشد.')
-            try:
-                attribute = EventAttribute.objects.get(id=attribute_id)
-            except EventAttribute.DoesNotExist:
-                raise serializers.ValidationError(f'ویژگی با id={attribute_id} وجود ندارد.')
+            for attr_data in attributes_data:
+                attribute_id = attr_data.get('attribute')
+                value = attr_data.get('value')
+                if not attribute_id or value is None:
+                    raise serializers.ValidationError('هر ویژگی باید attribute و value داشته باشد.')
+                try:
+                    attribute = EventAttribute.objects.get(id=attribute_id)
+                except EventAttribute.DoesNotExist:
+                    raise serializers.ValidationError(f'ویژگی با id={attribute_id} وجود ندارد.')
 
-            tmp = EventAttributeValueSerializer(data={
-                'event': event.id,
-                'attribute': attribute.id,
-                'value': value
-            })
-            tmp.is_valid(raise_exception=True)
-            tmp.save()
-
+                tmp = EventAttributeValueSerializer(data={
+                    'event': event.id,
+                    'attribute': attribute.id,
+                    'value': value
+                })
+                tmp.is_valid(raise_exception=True)
+                tmp.save()
         return event
     def update(self, instance, validated_data):
+        if 'status' in self.initial_data:
+            raise serializers.ValidationError('تغییر وضعیت فقط از طریق change-status مجاز است.')
         validated_data.pop('attributes_data', None)
         validated_data.pop('status', None)
         return super().update(instance, validated_data)

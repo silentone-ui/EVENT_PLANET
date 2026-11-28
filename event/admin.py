@@ -29,12 +29,19 @@ class FeedbackInline(admin.TabularInline):
     readonly_fields = ('created_at',)
 
 
+class ResultInline(admin.StackedInline):
+    model = Result
+    extra = 0
+    fields = ('title', 'description')
+    can_delete = False
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     list_display = ('title', 'status', 'organizer', 'capacity')
     list_filter = ('status',)
     search_fields = ('title',)
-    inlines = [StageInline, RegistrationInline]
+    inlines = [StageInline, RegistrationInline,FeedbackInline,ResultInline]
 
 
 @admin.register(Stage)
@@ -77,4 +84,11 @@ class EventAttributeAdmin(admin.ModelAdmin):
 
 @admin.register(EventAttributeValue)
 class EventAttributeValueAdmin(admin.ModelAdmin):
-    list_display = ('id', 'attribute', 'event', 'value')
+    list_display = ('id', 'attribute', 'event', 'value','value_display')
+    list_select_related = ('attribute', 'event')
+    list_filter = ('attribute',)
+    search_fields = ('event__title', 'attribute__name')
+
+    @admin.display(description='مقدار')
+    def value_display(self, obj):
+        return obj.value

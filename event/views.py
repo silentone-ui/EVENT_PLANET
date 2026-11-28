@@ -24,14 +24,17 @@ class EventViewSet(viewsets.ModelViewSet):
         ).order_by('-created_at')
         user = self.request.user
         if user.is_authenticated and getattr(user, 'role', None) == 'organizer':
-            return Event.objects.filter(
+            return qs.filter(
                 Q(status=Event.Status.PUBLISHED) | Q(organizer=user)
             ).order_by('-created_at')
         return qs.filter(status=Event.Status.PUBLISHED).order_by('-created_at')
 
     def perform_create(self, serializer):
-        serializer.save(organizer=self.request.user)
-
+        try:
+            serializer.save(organizer=self.request.user)
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.messages)
+        
     def perform_update(self, serializer):
         obj = self.get_object()
         if obj.organizer != self.request.user:
@@ -97,6 +100,14 @@ class RegistrationViewSet(viewsets.ModelViewSet):
             raise DRFValidationError('رویداد پیدا نشد.')
         except DjangoValidationError as e:
             raise DRFValidationError(e.messages)
+
+    def perform_update(self, serializer):
+        raise DRFValidationError('ویرایش ثبت‌نام مجاز نیست، فقط حذف و ثبت دوباره.')
+
+    def perform_destroy(self, instance):
+        if instance.user != self.request.user:
+            raise DRFValidationError('فقط صاحب ثبت‌نام می‌تواند لغو کند.')
+        instance.delete()
 
 class StageViewSet(viewsets.ModelViewSet):
     serializer_class = StageSerializer

@@ -188,9 +188,10 @@ class Stage(models.Model):
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
+    order = models.PositiveIntegerField(default=1)
 
     class Meta:
-        ordering = ['start_time']
+        ordering = ['start_time','order']
 
     def __str__(self):
         return f"{self.title} ({self.event.title})"
