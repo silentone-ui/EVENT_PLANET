@@ -8,10 +8,12 @@ from .serializers import RegisterSerializer, MyTokenObtainPairSerializer
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [permissions.AllowAny]
+    throttle_scope = 'register'
 
 
 class MyLoginView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
+    throttle_scope = 'login'
 
 
 class MeView(APIView):

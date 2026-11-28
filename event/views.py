@@ -1,6 +1,9 @@
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_headers
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
@@ -8,14 +11,18 @@ from .models import *
 from .serializers import *
 from core.permissions import *
 
-
+@method_decorator([vary_on_headers('Authorization'), cache_page(60 * 2)], name='list') 
+@method_decorator([vary_on_headers('Authorization'), cache_page(60 * 2)], name='retrieve')
 class EventViewSet(viewsets.ModelViewSet):
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOrganizerOrReadOnly]
 
     def get_queryset(self):
+        qs = Event.objects.select_related('organizer').prefetch_related(
+        'attribute_values__attribute'
+        ).order_by('-created_at')
         user = self.request.user
-        if getattr(user, 'role', None) == 'organizer':
+        if user.is_authenticated and getattr(user, 'role', None) == 'organizer':
             return Event.objects.filter(
                 Q(status=Event.Status.PUBLISHED) | Q(organizer=user)
             ).order_by('-created_at')
@@ -46,7 +53,6 @@ class EventViewSet(viewsets.ModelViewSet):
             event.save()
         except DjangoValidationError as e:
             raise DRFValidationError(e.messages)
-
         return Response(EventSerializer(event).data)
 
 
@@ -56,7 +62,7 @@ class RegistrationViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        return Registration.objects.filter(
+        return Registration.objects.select_related('event', 'user', 'event__organizer').filter(
             Q(user=user) | Q(event__organizer=user)
         ).order_by('-created_at')
 
@@ -73,7 +79,7 @@ class StageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Stage.objects.select_related('event').order_by('start_time')
+        qs = Stage.objects.select_related('event','event__organizer').order_by('start_time')
         event_id = self.request.query_params.get('event')
         if event_id:
             qs = qs.filter(event_id=event_id)
@@ -112,15 +118,13 @@ class StageAssignmentViewSet(viewsets.ModelViewSet):
             raise DRFValidationError(e.messages)
 
 
-
-
 class FeedbackViewSet(viewsets.ModelViewSet):
     serializer_class = FeedbackSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
-        return Feedback.objects.filter(
+        return Feedback.objects.select_related('event','user').filter(
             Q(user=user) | Q(event__organizer=user)
         ).order_by('-created_at')
 
@@ -130,14 +134,15 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as e:
             raise DRFValidationError(e.messages)
 
-
+@method_decorator([vary_on_headers('Authorization'), cache_page(60 * 5)], name='list')
+@method_decorator([vary_on_headers('Authorization'), cache_page(60 * 5)], name='retrieve')
 class ResultViewSet(viewsets.ModelViewSet):
     serializer_class = ResultSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsEventOwnerOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
-        qs = Result.objects.select_related('event').order_by('-created_at')
+        qs = Result.objects.select_related('event','event__organizer').order_by('-created_at')
         if getattr(user, 'role', None) == 'organizer' and user.is_authenticated:
             return qs.filter(Q(event__organizer=user) | Q(event__status=Event.Status.FINISHED))
         return qs.filter(event__status=Event.Status.FINISHED)
