@@ -7,6 +7,7 @@ from django.views.decorators.vary import vary_on_headers
 from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
+from django.db import transaction
 from .models import *
 from .serializers import *
 from core.permissions import *
@@ -26,10 +27,24 @@ class EventViewSet(viewsets.ModelViewSet):
             return Event.objects.filter(
                 Q(status=Event.Status.PUBLISHED) | Q(organizer=user)
             ).order_by('-created_at')
-        return Event.objects.filter(status=Event.Status.PUBLISHED).order_by('-created_at')
+        return qs.filter(status=Event.Status.PUBLISHED).order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(organizer=self.request.user)
+
+    def perform_update(self, serializer):
+        obj = self.get_object()
+        if obj.organizer != self.request.user:
+            raise DRFValidationError('فقط برگزارکننده خودش می‌تواند ویرایش کند.')
+        try:
+            serializer.save()
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.messages)
+
+    def perform_destroy(self, instance):
+        if instance.organizer != self.request.user:
+            raise DRFValidationError('فقط برگزارکننده خودش می‌تواند حذف کند.')
+        instance.delete()
 
     @action(detail=True, methods=['post'], url_path='change-status')
     def change_status(self, request, pk=None):
@@ -67,11 +82,21 @@ class RegistrationViewSet(viewsets.ModelViewSet):
         ).order_by('-created_at')
 
     def perform_create(self, serializer):
+        if getattr(self.request.user, 'role', None) != 'participant':
+            raise DRFValidationError('فقط شرکت‌کننده می‌تواند ثبت‌نام کند.')
+        event_id = self.request.data.get('event')
+        if not event_id:
+            raise DRFValidationError('فیلد event الزامی است.')
         try:
-            serializer.save(user=self.request.user)
+            with transaction.atomic():
+                event = Event.objects.select_for_update().get(pk=event_id)
+                if event.status != Event.Status.PUBLISHED:
+                    raise DRFValidationError('ثبت‌نام فقط برای رویداد منتشرشده مجاز است.')
+                serializer.save(user=self.request.user, event=event)
+        except Event.DoesNotExist:
+            raise DRFValidationError('رویداد پیدا نشد.')
         except DjangoValidationError as e:
             raise DRFValidationError(e.messages)
-
 
 class StageViewSet(viewsets.ModelViewSet):
     serializer_class = StageSerializer
@@ -129,10 +154,40 @@ class FeedbackViewSet(viewsets.ModelViewSet):
         ).order_by('-created_at')
 
     def perform_create(self, serializer):
+        if getattr(self.request.user, 'role', None) != 'participant':
+            raise DRFValidationError('فقط شرکت‌کننده می‌تواند بازخورد بدهد.')
+
+        event_id = self.request.data.get('event')
+        if not event_id:
+            raise DRFValidationError('فیلد event الزامی است.')
         try:
-            serializer.save(user=self.request.user)
+            with transaction.atomic():
+                event = Event.objects.select_for_update().get(pk=event_id)
+                if event.status != Event.Status.FINISHED:
+                    raise DRFValidationError('بازخورد فقط وقتی مجاز است که رویداد finished شده باشد.')
+                if event.organizer_id == self.request.user.id:
+                    raise DRFValidationError('برگزارکننده نمی‌تواند بازخورد ثبت کند.')
+                if not Registration.objects.filter(event=event, user=self.request.user).exists():
+                    raise DRFValidationError('فقط شرکت‌کننده‌ای که ثبت‌نام کرده می‌تواند بازخورد بدهد.')
+                serializer.save(user=self.request.user,event=event)
+        except Event.DoesNotExist:
+            raise DRFValidationError('رویداد پیدا نشد.')
         except DjangoValidationError as e:
             raise DRFValidationError(e.messages)
+        
+    def perform_update(self, serializer):
+        obj = self.get_object()
+        if obj.user != self.request.user:
+            raise DRFValidationError('فقط صاحب بازخورد می‌تواند ویرایش کند.')
+        try:
+            serializer.save()
+        except DjangoValidationError as e:
+            raise DRFValidationError(e.messages)
+
+    def perform_destroy(self, instance):
+        if instance.user != self.request.user:
+            raise DRFValidationError('فقط صاحب بازخورد می‌تواند حذف کند.')
+        instance.delete()
 
 @method_decorator([vary_on_headers('Authorization'), cache_page(60 * 5)], name='list')
 @method_decorator([vary_on_headers('Authorization'), cache_page(60 * 5)], name='retrieve')
@@ -159,11 +214,11 @@ class ResultViewSet(viewsets.ModelViewSet):
 class EventAttributeViewSet(viewsets.ModelViewSet):
     queryset = EventAttribute.objects.all().order_by('name')
     serializer_class =   EventAttributeSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizerOrReadOnly]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOrganizerOrReadOnly]
 
 class EventAttributeValueViewSet(viewsets.ModelViewSet):
     serializer_class = EventAttributeValueSerializer
-    permission_classes = [permissions.IsAuthenticated, IsEventOwnerOrReadOnly]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsEventOwnerOrReadOnly]
     def get_queryset(self):
         qs = EventAttributeValue.objects.select_related('event', 'attribute')
         if getattr(self.request.user, 'role', None) == 'organizer':

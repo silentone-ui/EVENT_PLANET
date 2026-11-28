@@ -67,6 +67,7 @@ class EventAttributeValueSerializer(serializers.ModelSerializer):
 
 class EventSerializer(serializers.ModelSerializer):
     attributes = EventAttributeValueSerializer(source='attribute_values', many=True, read_only=True)
+    organizer = serializers.ReadOnlyField(source='organizer.phone')
     organizer_firstname = serializers.ReadOnlyField(source='organizer.first_name')
 
     attributes_data = serializers.ListField(
@@ -79,10 +80,10 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'title', 'description', 'location', 'start_time',
-            'end_time', 'image', 'capacity', 'status',
+            'end_time', 'image', 'capacity', 'status','organizer',
             'organizer_firstname', 'attributes', 'attributes_data'
         ]
-        read_only_fields = ['status', 'organizer_phone']
+        read_only_fields = ['status', 'organizer','organizer_firstname']
 
     def create(self, validated_data):
         attributes_data = validated_data.pop('attributes_data', [])
@@ -92,22 +93,26 @@ class EventSerializer(serializers.ModelSerializer):
         for attr_data in attributes_data:
             attribute_id = attr_data.get('attribute')
             value = attr_data.get('value')
-
             if not attribute_id or value is None:
                 raise serializers.ValidationError('هر ویژگی باید attribute و value داشته باشد.')
-
             try:
                 attribute = EventAttribute.objects.get(id=attribute_id)
             except EventAttribute.DoesNotExist:
                 raise serializers.ValidationError(f'ویژگی با id={attribute_id} وجود ندارد.')
 
-            EventAttributeValue.objects.create(
-                event=event,
-                attribute=attribute,
-                value=value
-            )
+            tmp = EventAttributeValueSerializer(data={
+                'event': event.id,
+                'attribute': attribute.id,
+                'value': value
+            })
+            tmp.is_valid(raise_exception=True)
+            tmp.save()
 
         return event
+    def update(self, instance, validated_data):
+        validated_data.pop('attributes_data', None)
+        validated_data.pop('status', None)
+        return super().update(instance, validated_data)
 
 
 class RegistrationSerializer(serializers.ModelSerializer):

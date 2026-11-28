@@ -127,7 +127,6 @@ MAILERS = {
 
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
-    'rest_framework_simplejwt.authentication.JWTAuthentication',
 ]
 
 CACHES = {

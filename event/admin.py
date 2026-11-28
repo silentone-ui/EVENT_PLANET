@@ -34,7 +34,6 @@ class EventAdmin(admin.ModelAdmin):
     list_display = ('title', 'status', 'organizer', 'capacity')
     list_filter = ('status',)
     search_fields = ('title',)
-    exclude = ('participants',)
     inlines = [StageInline, RegistrationInline]
 
 
