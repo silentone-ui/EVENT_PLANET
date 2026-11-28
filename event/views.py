@@ -11,7 +11,7 @@ from core.permissions import *
 
 class EventViewSet(viewsets.ModelViewSet):
     serializer_class = EventSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOrganizerOrReadOnly]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOrganizerOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
@@ -69,7 +69,7 @@ class RegistrationViewSet(viewsets.ModelViewSet):
 
 class StageViewSet(viewsets.ModelViewSet):
     serializer_class = StageSerializer
-    permission_classes = [permissions.IsAuthenticated, IsEventOwnerOrReadOnly]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsEventOwnerOrReadOnly]
 
     def get_queryset(self):
         user = self.request.user
